@@ -6,16 +6,17 @@ import os
 import subprocess
 import requests
 import csv
+from dotenv import load_dotenv
 
-
+load_dotenv()
 
 app= FastAPI()
-api_key="secret123"  # APIキーを設定
+api_key=os.getenv("API_KEY")  # APIキーを設定
 
 # SBOMの情報をMySQLに格納するプログラム
 class SBOMrequests(BaseModel):
     
-    # バリーデーション
+     #バリーデーション
     tool: str   
     sbom: dict
 
@@ -130,6 +131,10 @@ async def get_sbom_data(authorization: str= Header(None)):
     
 
 
+if __name__=="__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload =  True)
+    
 
     
         
