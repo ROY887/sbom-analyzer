@@ -17,10 +17,13 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import LongTable
+import shutil
+import glob
 
 
 load_dotenv()  
 pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
+rules_file = "rules.kts"
 
 api_key = os.getenv("API_KEY")
 url=os.getenv("API_URL")
@@ -40,6 +43,7 @@ def detect_input_type(target):
     elif os.path.isdir(target):
         return "git"
     return "unknown"
+
 
 
 # === 各SBOMツール実行関数 ===
@@ -68,29 +72,77 @@ def run_trivy(target):
 
 
 def run_ORT(target):
-    try:
-        subprocess.run([
-            "ort", "analyze", "-i", target, "-o", "ort_sbom.json"
-        ], check=True)
-        subprocess.run([
-            "ort", "report", "-i", "ort_sbom.json", "-f", "cyclonedx", "-o", "ort_report.json"
-        ], check=True)
-        return "ort_sbom.json", "ort"
-    except subprocess.CalledProcessError as e:
-        print(f"[ERROR] ORT実行エラー: {e}")
-        return None, None
+    output_dir="ort_output"
+    
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+    
+
+    
+
+    # Analyzer 
+    subprocess.run([
+        "ort", "analyze",
+        "-i", target,
+        "-o", output_dir,
+        "--output-formats", "Json"
+    ], check=False)
+
+    #  Reporter 
+    analyzer_files = glob.glob(os.path.join(output_dir, "analyzer-result.json"))
+    if not analyzer_files:
+        print("[ERROR] analyzer-result ファイルが見つかりません")
+        return None
+    analyzer_file = analyzer_files[0]
+    
+    reporter_output = os.path.join(output_dir, "reporter-output")
+    os.makedirs(reporter_output, exist_ok=True)
+    
+    
+    
+    # evaluator_result_json = os.path.join(output_dir, "evaluator-result.json")
+    # subprocess.run([
+    #     "ort", "evaluate", 
+    #     "-i", analyzer_file, 
+    #     "-o", evaluator_result_json, 
+    #     "--output-formats", "Json",
+    #     "--rules-resource", rules_file
+    # ], check=True)
+    
+   
+
+    subprocess.run([
+            "ort", "report", 
+            "-i", analyzer_file, 
+            "-f","CycloneDX",
+            "-o", reporter_output
+        ], check=False)
+        
+    sbom_files = glob.glob(os.path.join(reporter_output, "*.json"))
+    if not sbom_files:
+            print("[ERROR] SBOM JSON が見つかりません")
+            return None
+    sbom_json = sbom_files[0]
+        
+       
+    return {"sbom_file": sbom_json ,
+                "vuln_file":None,
+                "tool":"ORT"}
+    
 
 
 def run_surfactant(target):
     try:
         subprocess.run([
             "surfactant", "generate", target, "surfactant_sbom.json",
-            "--output-format", "cyclonedx"
-        ], check=True)
+            "--output_format", "cyclonedx"
+        ], check=False)
         return "surfactant_sbom.json", "surfactant"
     except subprocess.CalledProcessError as e:
         print(f"[ERROR] Surfactant実行エラー: {e}")
         return None, None
+
 
 
 # === APIへPOSTする関数 ===
@@ -147,31 +199,31 @@ def get_sbom_data():
         print(f"[ERROR] API通信エラー: {e}")
         return None
 
-# === OSV APIを使用して脆弱性情報を取得 ===
-def osv_reference(package_name, version ,ecosystem="PyPI"):
-    osv_url = "https://api.osv.dev/v1/query"
-    query = {
-        "package": {
-            "name": package_name,
-            "ecosystem": ecosystem  # 例としてPythonのパッケージを指定
-        },
-        "version": version, 
-    }
+# # === OSV APIを使用して脆弱性情報を取得 ===
+# def osv_reference(package_name, version ,ecosystem="PyPI"):
+#     osv_url = "https://api.osv.dev/v1/query"
+#     query = {
+#         "package": {
+#             "name": package_name,
+#             "ecosystem": ecosystem  # 例としてPythonのパッケージを指定
+#         },
+#         "version": version, 
+#     }
     
     
-    response=requests.post(osv_url,json=query)
-    if response.status_code ==200:
-        vulunerabilities = response.json().get("vulunerabilities", [])
-        if vulunerabilities:
-            print(f"[OK] {package_name} の脆弱性情報を取得しました。")
-            for vuln in vulunerabilities:
-                print(f"Vulnerability ID: {vuln['id']}")
-                print(f"Summary: {vuln.get('summary', 'No summary available')}")
-                print(f"Published Date: {vuln.get('published', 'No date available')}")
-        else:
-            print(f"[INFO] {package_name} の脆弱性情報は見つかりませんでした。")
-    else:
-        print(f"[ERROR] OSV APIエラー: {response.status_code} - {response.text}")
+#     response=requests.post(osv_url,json=query)
+#     if response.status_code ==200:
+#         vulunerabilities = response.json().get("vulunerabilities", [])
+#         if vulunerabilities:
+#             print(f"[OK] {package_name} の脆弱性情報を取得しました。")
+#             for vuln in vulunerabilities:
+#                 print(f"Vulnerability ID: {vuln['id']}")
+#                 print(f"Summary: {vuln.get('summary', 'No summary available')}")
+#                 print(f"Published Date: {vuln.get('published', 'No date available')}")
+#         else:
+#             print(f"[INFO] {package_name} の脆弱性情報は見つかりませんでした。")
+#     else:
+#         print(f"[ERROR] OSV APIエラー: {response.status_code} - {response.text}")
         
 
 #解析した情報のレポート
@@ -364,6 +416,12 @@ def main():
         sbom_file = result.get("sbom_file")
         vuln_file = result.get("vuln_file")
         tool_name = result.get("tool")
+    #ORTの場合
+    elif input_type == "git":
+        
+        sbom_file = result.get("sbom_file")
+        vuln_file = result.get("vuln_file")
+        tool_name = result.get("tool")
     else:
         # ORT, Surfactant は (json_path, tool_name) を返す想定
         sbom_file, tool_name = result
@@ -379,7 +437,7 @@ def main():
             sbom_data = json.load(f)
         generate_sbom_report(sbom_data, tool_name, "sbom_report.pdf")
 
-    # 脆弱性レポート（Trivy限定）
+    # 脆弱性レポート
     if vuln_file:
         generate_vuln_report(vuln_file, tool_name, "vuln_report.pdf")
 
@@ -388,6 +446,7 @@ def main():
 # === 実行 ===
 if __name__ == "__main__":
     main()
+
 
 
 
