@@ -23,7 +23,7 @@ import glob
 
 load_dotenv()  
 pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
-rules_file = "rules.kts"
+rules_file = "rules.kts"#ortのevaluateを使うためのもの
 
 api_key = os.getenv("API_KEY")
 url=os.getenv("API_URL")
@@ -229,9 +229,9 @@ def get_sbom_data():
 #解析した情報のレポート
 def generate_sbom_report(sbom_data, tool_name, output_path="sbom_report.pdf"):
  
-    base_dir =  os.path.abspath(os.getcwd())
-    base, ext = os.path.splitext(output_path)
-    base = os.path.join(base_dir,os.path.basename(base))
+    base_dir =  os.path.abspath(os.getcwd())#abspathサーバー上のルートディレクトリへの絶対パスを表す
+    base, ext = os.path.splitext(output_path)#拡張子とファイル名を分けて保存する
+    base = os.path.join(base_dir,os.path.basename(base))#
     
     counter = 0
     #sbom_reportの重複を防ぐための処理
