@@ -210,7 +210,7 @@ def get_sbom_data():
 #         "version": version, 
 #     }
     
-    
+
 #     response=requests.post(osv_url,json=query)
 #     if response.status_code ==200:
 #         vulunerabilities = response.json().get("vulunerabilities", [])
@@ -234,7 +234,7 @@ def generate_sbom_report(sbom_data, tool_name, output_path="sbom_report.pdf"):
     base = os.path.join(base_dir,os.path.basename(base))#
     
     counter = 0
-    #sbom_reportの重複を防ぐための処理
+    #sbom_report.pdfの重複を防ぐための処理
     while True:
         if counter == 0 :
             new_output_path = f"{base}{ext}"
