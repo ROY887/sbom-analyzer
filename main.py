@@ -41,12 +41,12 @@ async def SBOM_insert(sbom_data: SBOMrequests, authorization: str=Header(None)):
         cursor.execute(
             "insert into scan (timestamp) values (now())"
         )
-        #scan_id = cursor.lastrowid  # 最後に挿入したIDを取得
+        scan_id = cursor.lastrowid  # 最後に挿入したIDを取得
         
-        # cursor.execute(
-        #     "INSERT INTO raw_sbom (scan_id, tool, json_data) VALUES (%s, %s, %s)",
-        #     (scan_id, sbom_data.tool, json.dumps(sbom_data.sbom))
-        # )
+        cursor.execute(
+            "INSERT INTO raw_sbom (scan_id, tool, json_data) VALUES (%s, %s, %s)",
+            (scan_id, sbom_data.tool, json.dumps(sbom_data.sbom))
+        )
 
         
         
